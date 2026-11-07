@@ -149,6 +149,12 @@ impl Overlay {
         if self.editing { if let Some(a) = self.cur.take() { if a.is_meaningful() { self.anns.push(a); } } }
         self.editing = false;
     }
+    /// Ctrl+A, as in Lightshot: the selection becomes the whole virtual screen.
+    fn select_all(&mut self) {
+        self.has_sel = true;
+        self.mode = Mode::Idle;
+        self.sel = RECT { l: 0, t: 0, r: self.w, b: self.h };
+    }
     fn undo(&mut self) {
         if self.editing { self.cur = None; self.editing = false; } else { self.anns.pop(); }
     }
@@ -248,8 +254,10 @@ impl Overlay {
         let ctrl = unsafe { GetKeyState(0x11) } < 0;
         if ctrl {
             match vk as u8 {
-                b'C' => { self.commit_text(); return Some(Act::Copy); }
-                b'S' => { self.commit_text(); return Some(Act::Save); }
+                b'A' => { self.commit_text(); self.select_all(); }
+                // with nothing selected, copy/save take the whole screen instead of silently closing
+                b'C' => { self.commit_text(); if !self.has_sel { self.select_all(); } return Some(Act::Copy); }
+                b'S' => { self.commit_text(); if !self.has_sel { self.select_all(); } return Some(Act::Save); }
                 b'Z' => self.undo(),
                 _ => return None,
             }

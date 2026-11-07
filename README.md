@@ -47,8 +47,9 @@ running, and when you do use it you want it to respond immediately.
 | `1`-`6` | red, yellow, green, blue, black, white |
 | wheel | thicker or thinner |
 | `Ctrl+Z` | undo |
-| `Ctrl+C`, `Enter`, double-click | copy and close |
-| `Ctrl+S` | save, copy and close |
+| `Ctrl+A` | select the whole screen |
+| `Ctrl+C`, `Enter`, double-click | copy and close (`Ctrl+C` takes the whole screen if nothing is selected) |
+| `Ctrl+S` | save, copy and close (whole screen if nothing is selected) |
 | `Esc`, right-click | cancel |
 
 ![The overlay: dimmed screen, selection with handles, size label and toolbar](docs/overlay.png)
