@@ -55,8 +55,29 @@ pub fn next_path(dir: &str) -> String {
 }
 
 /// Encodes `d` as PNG into the next free file in `dir`. Needs a live `Gdip`.
-pub unsafe fn save_png(d: &Dib, dir: &str) -> Option<String> {
-    let path = next_path(dir);
+pub unsafe fn save_png(d: &Dib, dir: &str) -> Option<String> { save_png_to(d, next_path(dir)) }
+
+/// Ctrl+Shift+S, Lightshot's Ctrl+S: a Save As dialog that opens in `dir` with the next name filled in.
+/// None when the dialog is cancelled or the save fails.
+pub unsafe fn save_png_as(d: &Dib, dir: &str, owner: H) -> Option<String> {
+    let mut file = [0u16; 1024];
+    let start: Vec<u16> = next_path(dir).encode_utf16().take(file.len() - 1).collect();
+    file[..start.len()].copy_from_slice(&start);
+    let filter: Vec<u16> = "PNG image\0*.png\0\0".encode_utf16().collect();
+    let (ext, dirw) = (crate::util::wide("png"), crate::util::wide(dir));
+    let mut o = OFN {
+        size: std::mem::size_of::<OFN>() as u32, owner, inst: null_mut(), filter: filter.as_ptr(), custom: null_mut(), max_custom: 0,
+        filter_index: 1, file: file.as_mut_ptr(), max_file: file.len() as u32, title_out: null_mut(), max_title_out: 0,
+        initial_dir: dirw.as_ptr(), title: null(), flags: 0x2 | 0x8 | 0x800 | 0x8_0000, // OVERWRITEPROMPT NOCHANGEDIR PATHMUSTEXIST EXPLORER
+        file_offset: 0, ext_offset: 0, def_ext: ext.as_ptr(), data: 0, hook: null_mut(), template: null(),
+        reserved: null_mut(), reserved2: 0, flags_ex: 0,
+    };
+    if GetSaveFileNameW(&mut o) == 0 { return None; }
+    let n = file.iter().position(|&c| c == 0).unwrap_or(file.len());
+    save_png_to(d, String::from_utf16_lossy(&file[..n]))
+}
+
+unsafe fn save_png_to(d: &Dib, path: String) -> Option<String> {
     let png = GUID { a: 0x557C_F406, b: 0x1A04, c: 0x11D3, d: [0x9A, 0x73, 0x00, 0x00, 0xF8, 0x1E, 0xF3, 0x2E] };
     let mut img = null_mut();
     if GdipCreateBitmapFromScan0(d.w, d.h, d.w * 4, 0x0002_2009, d.bits as *mut u8, &mut img) != 0 { return None; } // PixelFormat32bppRGB

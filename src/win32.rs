@@ -102,6 +102,17 @@ extern "system" {
 extern "system" {
     pub fn RegGetValueW(k: isize, sub: *const u16, v: *const u16, f: u32, t: *mut u32, d: *mut c_void, n: *mut u32) -> i32;
 }
+/// OPENFILENAMEW
+#[repr(C)] pub struct OFN {
+    pub size: u32, pub owner: H, pub inst: H, pub filter: *const u16, pub custom: *mut u16, pub max_custom: u32, pub filter_index: u32,
+    pub file: *mut u16, pub max_file: u32, pub title_out: *mut u16, pub max_title_out: u32, pub initial_dir: *const u16, pub title: *const u16,
+    pub flags: u32, pub file_offset: u16, pub ext_offset: u16, pub def_ext: *const u16, pub data: isize, pub hook: H, pub template: *const u16,
+    pub reserved: H, pub reserved2: u32, pub flags_ex: u32,
+}
+#[link(name = "comdlg32", kind = "raw-dylib")]
+extern "system" {
+    pub fn GetSaveFileNameW(o: *mut OFN) -> i32;
+}
 #[link(name = "gdiplus", kind = "raw-dylib")]
 extern "system" {
     pub fn GdiplusStartup(t: *mut usize, i: *const GpInput, o: *mut c_void) -> i32;

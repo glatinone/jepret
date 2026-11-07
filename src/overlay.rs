@@ -7,7 +7,7 @@
 
 use crate::annotate::{self, Ann, Tool, COLORS, TOOLS};
 use crate::capture::{grab, vscreen, Dib};
-use crate::output::{save_png, to_clipboard, Gdip};
+use crate::output::{save_png, save_png_as, to_clipboard, Gdip};
 use crate::util::{bgr, log, wide, Config};
 use crate::win32::*;
 use std::ptr::{null, null_mut};
@@ -16,7 +16,7 @@ use std::ptr::{null, null_mut};
 enum Mode { Idle, Selecting, Moving, Resizing(u8), Drawing }
 
 #[derive(Clone, Copy, PartialEq)]
-enum Act { Copy, Save, Close }
+enum Act { Copy, Save, SaveAs, Close }
 
 /// Toolbar: Pen Line Arrow Rect Marker Text | Color Undo | Copy Save Close
 const BUTTONS: usize = 11;
@@ -92,6 +92,8 @@ unsafe fn finish(a: Act) {
         let copied = to_clipboard(&d, o.hwnd);
         if a == Act::Save {
             log(&format!("{}x{} -> {}", d.w, d.h, save_png(&d, &o.cfg.save_dir).unwrap_or_else(|| "SAVE FAILED".into())));
+        } else if a == Act::SaveAs {
+            log(&format!("{}x{} as -> {}", d.w, d.h, save_png_as(&d, &o.cfg.save_dir, o.hwnd).unwrap_or_else(|| "cancelled".into())));
         } else if !copied {
             log("clipboard busy, copy failed");
         }
@@ -154,6 +156,21 @@ impl Overlay {
         self.has_sel = true;
         self.mode = Mode::Idle;
         self.sel = RECT { l: 0, t: 0, r: self.w, b: self.h };
+    }
+    /// Arrow keys move the selection 1 px; Shift+arrows grow or shrink it from the right/bottom edge (as in Lightshot).
+    fn nudge(&mut self, vk: usize) {
+        let (dx, dy) = match vk { 0x25 => (-1, 0), 0x26 => (0, -1), 0x27 => (1, 0), _ => (0, 1) };
+        let r = &mut self.sel;
+        if unsafe { GetKeyState(0x10) } < 0 {
+            r.r = (r.r + dx).clamp(r.l + 1, self.w);
+            r.b = (r.b + dy).clamp(r.t + 1, self.h);
+        } else {
+            let (w, h) = (r.r - r.l, r.b - r.t);
+            r.l = (r.l + dx).clamp(0, self.w - w);
+            r.t = (r.t + dy).clamp(0, self.h - h);
+            r.r = r.l + w;
+            r.b = r.t + h;
+        }
     }
     fn undo(&mut self) {
         if self.editing { self.cur = None; self.editing = false; } else { self.anns.pop(); }
@@ -257,7 +274,11 @@ impl Overlay {
                 b'A' => { self.commit_text(); self.select_all(); }
                 // with nothing selected, copy/save take the whole screen instead of silently closing
                 b'C' => { self.commit_text(); if !self.has_sel { self.select_all(); } return Some(Act::Copy); }
-                b'S' => { self.commit_text(); if !self.has_sel { self.select_all(); } return Some(Act::Save); }
+                b'S' => {
+                    self.commit_text();
+                    if !self.has_sel { self.select_all(); }
+                    return Some(if unsafe { GetKeyState(0x10) } < 0 { Act::SaveAs } else { Act::Save });
+                }
                 b'Z' => self.undo(),
                 _ => return None,
             }
@@ -272,6 +293,7 @@ impl Overlay {
                 0x1B => return Some(Act::Close),
                 0x0D => return self.has_sel.then_some(Act::Copy),
                 0x31..=0x36 => self.color = vk - 0x31,
+                0x25..=0x28 if self.has_sel => self.nudge(vk),
                 _ => {
                     let i = match vk as u8 { b'P' => 0, b'L' => 1, b'A' => 2, b'R' => 3, b'M' => 4, b'T' => 5, _ => return None };
                     return if self.has_sel { self.button(i) } else { None };
